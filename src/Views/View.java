@@ -1,5 +1,5 @@
 
-package Client;
+package Views;
 
 public class View {
     
