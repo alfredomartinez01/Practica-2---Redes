@@ -2,8 +2,8 @@ package Models;
 
 public class Punto {
 
-    int x;
-    int y;
+    public int x;
+    public int y;
 
     public Punto(int x, int y) {
         this.x = x;

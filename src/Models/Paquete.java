@@ -10,10 +10,11 @@ public class Paquete implements Serializable{
         CONFIRMACION,
         TAREA_FINALIZADA,
         FINALIZAR_CONEXION,
-        PRIMER_TURNO,
+        TURNO,
         RESULTADO_TIRO,
         NAVE_HUNDIDA,
-        PARTIDA_FINALIZADA
+        PARTIDA_FINALIZADA,
+        TIRO
     }
     public static enum Turno{
         SERVIDOR,
@@ -24,7 +25,7 @@ public class Paquete implements Serializable{
         CLIENTE
     }
     public static enum ResultadoTiro{
-        ERROR,
+        ACERTO,
         FALLO
     }
     
@@ -92,6 +93,30 @@ public class Paquete implements Serializable{
 
     public String getNombre() {
         return nombre;
+    }
+
+    public Turno getTurno() {
+        return turno;
+    }
+
+    public ResultadoTiro getResultado_tiro() {
+        return resultado_tiro;
+    }
+
+    public Ganador getGanador() {
+        return ganador;
+    }
+
+    public int getPosicion_x() {
+        return posicion_x;
+    }
+
+    public int getPosicion_y() {
+        return posicion_y;
+    }
+
+    public Nave getNaveHundida() {
+        return naveHundida;
     }
     
     

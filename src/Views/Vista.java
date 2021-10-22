@@ -1,7 +1,18 @@
 package Views;
 
+import Models.Nave;
+import Models.Punto;
+import Models.Nave.TipoNave;
 import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.EventQueue;
+import java.awt.event.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.JPanel;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import javax.swing.JLabel;
 
 public class Vista extends javax.swing.JFrame {
 
@@ -10,22 +21,661 @@ public class Vista extends javax.swing.JFrame {
     private static final int alto = java.awt.Toolkit.getDefaultToolkit().getScreenSize().height;
     private static JPanel[][] tableroPropio = new JPanel[10][10];
     private static JPanel[][] tableroOponente = new JPanel[10][10];
+    private static JPanel[][] panelNaves = new JPanel[4][4]; // Arreglo ocupado para
+    private static int naveDelOlvido = -1, posicion = -1; // Esta será el índice la nave temporal que habrá escogido el usuario para colocar, y qué posición de la nave vamos a colocar4
+    private static int n_nave = 0; // Variable para controlar el número de nave de cada tipo
+    public boolean navesColocadas = false; // Variable para saber si las naves ya fueron colocadas
+    private static Color cl_aux; // Variable de color auxiliar para pintar las panelNaves
+
+    private ArrayList<Punto> puntosTirados = new ArrayList<Punto>(); // Arreglo de tiros
+    public Punto tiro; // Generamos una variable auxiliar para los tiros
+    public boolean bTiroCorrecto = false; // Bandera para indicar que le dieron a una nave
+    public boolean bNaveHundida = false; // Bandera para indicar que hundieron la nave
+    public boolean bNavesHundidas = false; // Bandera para indicar que hundieron todas las naves
+
+    public String nombreCliente = "Tablero oponente";
+
+    private static Nave naves[] = new Nave[10]; // Todas las naves dentro del tablero
 
     public Vista() {
         initComponents();
         this.setExtendedState(MAXIMIZED_BOTH);
-        declararTableros();
+        declararTablerosNaves();
+        agregarListenersPropio();
+
+    }
+
+    /*
+        Función para mostrar alguna instruccion
+     */
+    public void mostrarInstruccion(String instruccion) {
+        lbl_instrucciones.setText("Instrucciones: " + instruccion);
+    }
+
+    /*
+        Función para acomodar las piezas de forma manual
+     */
+    public void acomodarManualmente() {
+        // Colocando acorazado
+        naveDelOlvido = 0;
+        colocarNave();
+    }
+
+    /*
+        Función para acomodar las piezas de forma automática
+     */
+    public void acomodarAutomáticamente() {
+        eliminarListenersTableroPropio(); // Quitamos los listeners
+        lbl_my_tab1.setText(nombreCliente);
+        int x;
+        int y;
+        int direccion = -1;
+        int eje; // Variable auxiliar para saber con qué eje comparar las dimensiones
+
+        // ACOMODANDO EL ACORAZADO      
+        do {
+            naves[0] = new Nave(TipoNave.ACORAZADO);
+
+            x = aleatorio(10);
+            y = aleatorio(10);
+            direccion = aleatorio(2);  // A la derecha (0) o abajo (1)
+
+            if (direccion == 1) {
+                eje = x;
+            } else {
+                eje = y;
+            }
+
+            // Generamos la nave
+            for (int i = 0; i < naves[0].getLongitud(); i++) {
+                if (direccion == 1) {
+                    naves[0].agregar(x + i, y);
+                } else {
+                    naves[0].agregar(x, y + i);
+                }
+            }
+        } while (eje + naves[0].getLongitud() >= 10);
+
+        // Pintamos la nave
+        for (int i = 0; i < naves[0].getLongitud(); i++) {
+            tableroPropio[naves[0].obtenerPuntos().get(i).x][naves[0].obtenerPuntos().get(i).y].setBackground(new Color(102, 102, 255));
+        }
+        eliminarListenersTableroPropio(naves[0]); // Eliminamos los listeners de las naves
+
+        // ACOMODANDO LOS CRUCEROS
+        for (int cr = 1; cr < 3; cr++) {
+
+            do {
+                naves[cr] = new Nave(TipoNave.CRUCERO);
+                x = aleatorio(10);
+                y = aleatorio(10);
+                direccion = aleatorio(2); // A la derecha (0) o abajo (1)
+
+                if (direccion == 1) {
+                    eje = x;
+                } else {
+                    eje = y;
+                }
+
+                // Generamos la nave
+                for (int i = 0; i < naves[cr].getLongitud(); i++) {
+                    if (direccion == 1) {
+                        naves[cr].agregar(x + i, y);
+                    } else {
+                        naves[cr].agregar(x, y + i);
+                    }
+                }
+
+            } while (eje + naves[cr].getLongitud() >= 10 || intersectaNave(cr, naves[cr]));
+
+            // Pintamos la nave
+            for (int i = 0; i < naves[cr].getLongitud(); i++) {
+                tableroPropio[naves[cr].obtenerPuntos().get(i).x][naves[cr].obtenerPuntos().get(i).y].setBackground(new Color(0, 153, 153));
+            }
+            eliminarListenersTableroPropio(naves[cr]);
+        }
+
+        // ACOMODANDO LOS DESTRUCTORES
+        for (int des = 3; des < 6; des++) {
+
+            do {
+                naves[des] = new Nave(TipoNave.DESTRUCTOR);
+                x = aleatorio(10);
+                y = aleatorio(10);
+                direccion = aleatorio(2); // A la derecha o abajo
+
+                if (direccion == 1) {
+                    eje = x;
+                } else {
+                    eje = y;
+                }
+
+                // Generamos la nave
+                for (int i = 0; i < naves[des].getLongitud(); i++) {
+                    if (direccion == 1) {
+                        naves[des].agregar(x + i, y);
+                    } else {
+                        naves[des].agregar(x, y + i);
+                    }
+                }
+
+            } while (eje + naves[des].getLongitud() >= 10 || intersectaNave(des, naves[des]));
+
+            // Pintamos la nave
+            for (int i = 0; i < naves[des].getLongitud(); i++) {
+                tableroPropio[naves[des].obtenerPuntos().get(i).x][naves[des].obtenerPuntos().get(i).y].setBackground(new Color(102, 102, 102));
+            }
+            eliminarListenersTableroPropio(naves[des]);
+        }
+
+        //ACOMODANDO LOS SUBMARINOS
+        for (int sub = 6; sub < 10; sub++) {
+
+            do {
+                naves[sub] = new Nave(TipoNave.SUBMARINO);
+                x = aleatorio(10);
+                y = aleatorio(10);
+                direccion = aleatorio(2); // A la derecha o abajo
+
+                if (direccion == 1) {
+                    eje = x;
+                } else {
+                    eje = y;
+                }
+
+                // Generamos la nave
+                for (int i = 0; i < naves[sub].getLongitud(); i++) {
+                    if (direccion == 1) {
+                        naves[sub].agregar(x + i, y);
+                    } else {
+                        naves[sub].agregar(x, y + i);
+                    }
+                }
+
+            } while (eje + naves[sub].getLongitud() >= 10 || intersectaNave(sub, naves[sub]));
+
+            // Pintamos la nave
+            for (int i = 0; i < naves[sub].getLongitud(); i++) {
+                tableroPropio[naves[sub].obtenerPuntos().get(i).x][naves[sub].obtenerPuntos().get(i).y].setBackground(new Color(102, 102, 0));
+            }
+
+            eliminarListenersTableroPropio(naves[sub]);
+        }
+    }
+
+    /*
+        Función que comprueba si un tiro ya ha sido realizado
+     */
+    public boolean tiroHecho(Punto pt) {
+        for (Punto punto : puntosTirados) {
+            if (punto.equals(pt)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /*
+        Función para tirar de forma manual
+     */
+    public void tirarManualmente() {
+        tiro = null;
+        agregarListenersTableroOponente();
+
+        // Removemos los listeners de los puntos ya usados
+        for (Punto pt : puntosTirados) {
+            tableroOponente[pt.x][pt.y].removeMouseListener(ml_tablero_oponente);
+        }
+
+    }
+
+    /*
+        Función para tirar de forma automática
+     */
+    public void tirarAutomáticamente(int x, int y) {
+        tableroOponente[x][y].setBackground(Color.red);
+        puntosTirados.add(new Punto(x, y));
+    }
+
+    /*
+        Mostramos y recibimos el tiro que hizo el oponente
+     */
+    public void recibirTiro() {
+        // Reiniciamos las banderas
+        bTiroCorrecto = false;
+        bNaveHundida = true; // Inicializamos en verdadero para después darle false con algún punto no hundido
+        bNavesHundidas = true;
+
+        tableroPropio[tiro.x][tiro.y].setBackground(Color.red);
+
+        // Buscamos la nave para darle valor de null a la posicion
+        Nave naveTiro = null; // Nave auxiliar para guardar donde cae el tiro
+
+        // Buscamos el punto donde fue el tiro y lo declaramos en nulo
         
-        
+        for (Nave nv : naves) {
+            int contador = 0;
+            System.out.println("Nave: " + contador);
+            
+            for (Punto nvPt : nv.obtenerPuntos()) {
+                if (nvPt.x == tiro.x && nvPt.y == tiro.y) { // En caso de que sea el mismo punto                    
+                    System.out.println("Encontrado x:" + nvPt.x + ", y: " + nvPt.y);
+                    nv.obtenerPuntos().get(contador).x = -1;
+                    nv.obtenerPuntos().get(contador).y = -1;
+                    bTiroCorrecto = true;
+                    naveTiro = nv;
+                    break;
+                }
+                contador++;
+            }
+        }
+
+        // Comprobamos que no estén hundidas todas las naves
+        // También comprobamos si la nave no está en null todo (hundida)
+        for (Nave nv : naves) {
+            for (Punto nvPt : nv.obtenerPuntos()) {
+                
+                if (nvPt.x != -1 && nvPt.y != -1) { // En caso de que no sea nulo
+                    bNavesHundidas = false;
+                    
+                    if(nv.equals(naveTiro) || naveTiro == null){
+                        bNaveHundida = false;
+                    }
+                }
+            }
+        }
+
+    }
+
+    /*
+        Generar número aleatorio entre 0 y max
+     */
+    public int aleatorio(int max) {
+        return (int) (Math.random() * max + 1) - 1;
+    }
+
+    /*
+        Generamos los puntos a partir de los puntos, dirección, longitud e indice de nave, y comprobamos que no intersecte
+     */
+    public boolean intersectaNave(int indice, Nave naveComparar) {
+        for (int k = 0; k < indice; k++) { // Recorremos cada nave
+            Nave nvTmp = naves[k];
+
+            for (int i = 0; i < nvTmp.getLongitud(); i++) { // Recorremos cada punto de cada nave
+
+                for (int t = 0; t < naveComparar.getLongitud(); t++) { // Comparamos el cada punto de la nave nueva
+                    if (nvTmp.intersecta(naveComparar.obtenerPuntos().get(t).x, naveComparar.obtenerPuntos().get(t).y)) {
+                        //System.out.println("Sí");
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /*
+        Iniciamos el proceso de colocación de panelNaves
+     */
+    public void colocarNave() {
+        String nave = "";
+        switch (naveDelOlvido) {
+            case 0:
+                nave = "acorazado";
+                break;
+            case 1:
+                nave = "cruceros";
+                break;
+            case 2:
+                nave = "destructores";
+                break;
+            case 3:
+                nave = "sumbarino";
+                break;
+        }
+        lbl_instrucciones.setText("Instrucciones: Por favor, seleccione alguno de los extremos del " + nave + " y colócelo sobre el tablero.");
+        pintarNave();
+        agregarListenersNave();
+
+    }
+
+    /*
+        Eliminamos los listeners de las casillas de esa nave
+     */
+    public void eliminarListenersTableroPropio(Nave nave) {
+        for (Punto pt : nave.obtenerPuntos()) {
+            tableroPropio[pt.x][pt.y].removeMouseListener(ml_tablero);
+        }
     }
     
-    
-    
-    
+    /*
+        Eliminamos los listeners de las casillas de todo el tablero
+     */
+    public void eliminarListenersTableroPropio() {
+        for (int i = 0; i < 10; i++) {
+            for (JPanel panel : tableroPropio[i]) {
+                panel.removeMouseListener(ml_tablero);
+            }
+        }
+    }
+
+    /*
+        Eliminamos los listeners de las casillas de la nave de tiro
+     */
+    public void eliminarListenersTableroOponente() {
+        for (int i = 0; i < 10; i++) {
+            for (JPanel panel : tableroOponente[i]) {
+                panel.removeMouseListener(ml_tablero_oponente);
+                panel.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+            }
+        }
+    }
+
+    MouseListener ml_naves = new MouseListener() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            e.getComponent().setCursor(new Cursor(Cursor.HAND_CURSOR));
+        }
+
+        @Override
+        public void mouseExited(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            for (int i = 0; i < 4; i++) {
+                for (int k = 0; k <= 3 - i; k++) {
+                    if (panelNaves[i][k].equals(e.getComponent())) {
+                        posicion = k;
+                        System.out.println(k);
+                        break;
+                    }
+                }
+            }
+
+        }
+    };
+
+    /*
+        Eliminamos los listeners de las casillas de la sección de naves
+     */
+    public void eliminarListenersNaves() {
+        panelNaves[naveDelOlvido][0].removeMouseListener(ml_naves);
+        panelNaves[naveDelOlvido][3 - naveDelOlvido].removeMouseListener(ml_naves);
+        panelNaves[naveDelOlvido][3 - naveDelOlvido].setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+        panelNaves[naveDelOlvido][0].setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+    }
+
+    /*
+        Agregamos los event listeners a la nave del olvido :'v
+     */
+    public void agregarListenersNave() {
+
+        // Agreamos el listenes refinido arriba
+        panelNaves[naveDelOlvido][0].addMouseListener(ml_naves);
+        panelNaves[naveDelOlvido][3 - naveDelOlvido].addMouseListener(ml_naves);
+    }
+
+    MouseListener ml_tablero = new MouseListener() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            e.getComponent().setBackground(Color.red);
+        }
+
+        @Override
+        public void mouseExited(MouseEvent e) {
+            e.getComponent().setBackground(new Color(204, 255, 255));
+        }
+
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            if (naveDelOlvido != -1 && posicion != -1) { // Comprueba que se esté colocando una nave
+                e.getComponent().setBackground(cl_aux);
+
+                // Declaramos las posiciones a partir de las cuales irán los barcos del mismo tipo y el número de naves que deberá tener máximo y el label de restantes
+                int indice_ref = 0;
+                int maxNaves = 0;
+                JLabel restantes = null;
+                switch (naveDelOlvido) {
+                    case 0:
+                        indice_ref = 0;
+                        maxNaves = 0;
+                        restantes = acorazado_rest;
+                        break;
+                    case 1:
+                        indice_ref = 1;
+                        maxNaves = 1;
+                        restantes = crucero_rest;
+                        break;
+                    case 2:
+                        indice_ref = 3;
+                        maxNaves = 2;
+                        restantes = destructor_rest;
+                        break;
+                    case 3:
+                        indice_ref = 6;
+                        maxNaves = 3;
+                        restantes = submarino_rest;
+                        break;
+                }
+
+                if (posicion == 0) {
+                    naves[indice_ref + n_nave] = new Nave(naveDelOlvido); // Inicialiazmos la nave
+
+                    // Buscamos la posición inicial del barco
+                    for (int i = 0; i < 10; i++) {
+                        for (int k = 0; k < 10; k++) {
+                            if (tableroPropio[i][k].equals(e.getComponent())) {
+                                naves[indice_ref + n_nave].agregar(i, k); // Colocamos el punto inicial
+                                System.out.println("Entontrado inicio");
+                                break;
+                            }
+                        }
+                    }
+                } else if (posicion == 3 - naveDelOlvido) {
+                    // Buscamos la posición final del barco
+                    for (int i = 0; i < 10; i++) {
+                        for (int k = 0; k < 10; k++) {
+
+                            if (tableroPropio[i][k].equals(e.getComponent())) { // Si encontramos la posición final del barco
+                                System.out.println("Entontrado fin");
+                                // Obtenemos las posiciones iniciales
+                                int x_inicial = naves[indice_ref + n_nave].obtenerPuntos().get(0).x;
+                                int y_inicial = naves[indice_ref + n_nave].obtenerPuntos().get(0).y;
+
+                                // Insertamos las posiciones intermedias y la final
+                                if (x_inicial == i) { // En caso de que sea hotizontal
+                                    for (int p = 1; p < naves[indice_ref + n_nave].getLongitud() - 1; p++) { // Recorremos todas las posiciones intermedias
+                                        naves[indice_ref + n_nave].agregar(i, y_inicial + p);
+                                    }
+                                } else { // En caos de que sea vertical
+                                    for (int p = 1; p < naves[indice_ref + n_nave].getLongitud() - 1; p++) { // Recorremos todas las posiciones intermedias
+                                        naves[indice_ref + n_nave].agregar(x_inicial + p, k);
+                                    }
+                                }
+
+                                naves[indice_ref + n_nave].agregar(i, k);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (naveDelOlvido == 3 || posicion == 3 - naveDelOlvido) {
+                    for (Punto pt : naves[indice_ref + n_nave].obtenerPuntos()) {
+                        tableroPropio[pt.x][pt.y].setBackground(cl_aux);
+                        System.out.println(pt.x + ", " + pt.y);
+
+                        restantes.setText(maxNaves - n_nave + " restantes");
+                    }
+                    eliminarListenersTableroPropio(naves[indice_ref + n_nave]);
+
+                    // Comprobamos que sea la última nave para hacer el cambio
+                    if (maxNaves - n_nave == 0 && naveDelOlvido < 3) {
+                        // Colocando otro conjunto de naves
+                        eliminarListenersNaves();
+                        naveDelOlvido = naveDelOlvido + 1;
+                        colocarNave();
+                        n_nave = 0;
+
+                    } else if (maxNaves - n_nave == 0 && naveDelOlvido == 3) {
+                        // Finalizando la colocación
+                        eliminarListenersNaves();
+                        oscurecerNaves();
+                        naveDelOlvido = -1;
+
+                        navesColocadas = true;
+                        eliminarListenersTableroPropio(); // Quitamos ya los listeners
+                    } else {
+                        n_nave++;
+                    }
+                }
+                e.getComponent().removeMouseListener(this);
+            }
+        }
+    };
+
+    MouseListener ml_tablero_oponente = new MouseListener() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent e) {
+            e.getComponent().setBackground(Color.red);
+        }
+
+        @Override
+        public void mouseExited(MouseEvent e) {
+            e.getComponent().setBackground(new Color(204, 255, 255));
+        }
+
+        @Override
+        public void mouseClicked(MouseEvent e) {
+            e.getComponent().setBackground(Color.red);
+
+            // Buscamos la posición del tablero
+            for (int i = 0; i < 10; i++) {
+                for (int k = 0; k < 10; k++) {
+                    if (tableroOponente[i][k].equals(e.getComponent())) {
+                        tiro = new Punto(i, k);
+                        puntosTirados.add(tiro);
+                        break;
+                    }
+                }
+            }
+            // Desactivamos los listeners del tablero
+            eliminarListenersTableroOponente();
+        }
+    };
+
+    /*
+        Agregamos los event listeners al tablero propio
+     */
+    public void agregarListenersPropio() {
+        // Agreamos los listeners definidos arriba
+
+        /// Asignamos listeners a los del tablero propio
+        for (int i = 0; i < 10; i++) {
+            for (JPanel panel : tableroPropio[i]) {
+                panel.addMouseListener(ml_tablero);
+            }
+        }
+    }
+
+    /*
+        Agregamos los event listeners al tablero del oponente
+     */
+    public void agregarListenersTableroOponente() {
+        // Agreamos los listeners definidos arriba
+
+        /// Asignamos listeners a los del tablero del oponente
+        for (int i = 0; i < 10; i++) {
+            for (JPanel panel : tableroOponente[i]) {
+                panel.addMouseListener(ml_tablero_oponente);
+            }
+        }
+    }
+
+    /*
+        Despintamos las panelNaves para irlas pintando al colorear
+     */
+    public void oscurecerNaves() {
+        for (int i = 0; i < 4; i++) {
+            for (JPanel panel : panelNaves[i]) {
+                if (panel != null) {
+                    panel.setBackground(new Color(187, 187, 187));
+                }
+
+            }
+        }
+    }
+
+    /*
+        Pintamos una nave
+     */
+    public void pintarNave() {
+        oscurecerNaves();
+        switch (naveDelOlvido) {
+            case 0:
+                cl_aux = new Color(102, 102, 255);
+                break;
+            case 1:
+                cl_aux = new Color(0, 153, 153);
+                break;
+            case 2:
+                cl_aux = new Color(102, 102, 102);
+                break;
+            case 3:
+                cl_aux = new Color(102, 102, 0);
+                break;
+        }
+
+        for (JPanel panel : panelNaves[naveDelOlvido]) {
+            if (panel != null) {
+                panel.setBackground(cl_aux);
+            }
+
+        }
+    }
+
     /*
         Declaramos todas las celdas de los tableros
      */
-    public void declararTableros() {
+    public void declararTablerosNaves() {
+        // Declarando todas las celdas de las panelNaves
+        panelNaves[0][0] = acorazado_1;
+        panelNaves[0][1] = acorazado_2;
+        panelNaves[0][2] = acorazado_3;
+        panelNaves[0][3] = acorazado_4;
+        panelNaves[1][0] = crucero_1;
+        panelNaves[1][1] = crucero_2;
+        panelNaves[1][2] = crucero_3;
+        panelNaves[2][0] = destructor_1;
+        panelNaves[2][1] = destructor_2;
+        panelNaves[3][0] = submarino_1;
+        oscurecerNaves(); // Las oscueremos de un inicio
+
         // Declarando todas las celdas del tablero propio
         tableroPropio[0][0] = my_1x1;
         tableroPropio[0][1] = my_1x2;
@@ -127,7 +777,7 @@ public class Vista extends javax.swing.JFrame {
         tableroPropio[9][7] = my_10x8;
         tableroPropio[9][8] = my_10x9;
         tableroPropio[9][9] = my_10x10;
-        
+
         // Tablero del oponente
         tableroOponente[0][0] = vs_1x1;
         tableroOponente[0][1] = vs_1x2;
@@ -449,14 +1099,16 @@ public class Vista extends javax.swing.JFrame {
         crucero_3 = new javax.swing.JPanel();
         submarino_1 = new javax.swing.JPanel();
         jLabel4 = new javax.swing.JLabel();
-        destructores_2 = new javax.swing.JPanel();
+        destructor_2 = new javax.swing.JPanel();
         jLabel5 = new javax.swing.JLabel();
-        destructores_1 = new javax.swing.JPanel();
+        destructor_1 = new javax.swing.JPanel();
         acorazado_rest = new javax.swing.JLabel();
         crucero_rest = new javax.swing.JLabel();
         destructor_rest = new javax.swing.JLabel();
         submarino_rest = new javax.swing.JLabel();
         lbl_instrucciones = new javax.swing.JLabel();
+        jButton1 = new javax.swing.JButton();
+        jButton2 = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setBackground(new java.awt.Color(255, 255, 255));
@@ -3745,11 +4397,11 @@ public class Vista extends javax.swing.JFrame {
 
         lbl_my_tab.setFont(new java.awt.Font("Microsoft YaHei UI", 0, 18)); // NOI18N
         lbl_my_tab.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        lbl_my_tab.setText("(Mi tablero)");
+        lbl_my_tab.setText("Mi tablero");
 
         lbl_my_tab1.setFont(new java.awt.Font("Microsoft YaHei UI", 0, 18)); // NOI18N
         lbl_my_tab1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        lbl_my_tab1.setText("(VS tablero)");
+        lbl_my_tab1.setText("Tablero oponente");
 
         jLabel1.setFont(new java.awt.Font("MS UI Gothic", 0, 18)); // NOI18N
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -3876,16 +4528,16 @@ public class Vista extends javax.swing.JFrame {
         jLabel4.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel4.setText("Destructores");
 
-        destructores_2.setBackground(new java.awt.Color(102, 102, 102));
+        destructor_2.setBackground(new java.awt.Color(102, 102, 102));
 
-        javax.swing.GroupLayout destructores_2Layout = new javax.swing.GroupLayout(destructores_2);
-        destructores_2.setLayout(destructores_2Layout);
-        destructores_2Layout.setHorizontalGroup(
-            destructores_2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        javax.swing.GroupLayout destructor_2Layout = new javax.swing.GroupLayout(destructor_2);
+        destructor_2.setLayout(destructor_2Layout);
+        destructor_2Layout.setHorizontalGroup(
+            destructor_2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGap(0, 28, Short.MAX_VALUE)
         );
-        destructores_2Layout.setVerticalGroup(
-            destructores_2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        destructor_2Layout.setVerticalGroup(
+            destructor_2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGap(0, 25, Short.MAX_VALUE)
         );
 
@@ -3893,29 +4545,43 @@ public class Vista extends javax.swing.JFrame {
         jLabel5.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel5.setText("Submarino");
 
-        destructores_1.setBackground(new java.awt.Color(102, 102, 102));
+        destructor_1.setBackground(new java.awt.Color(102, 102, 102));
 
-        javax.swing.GroupLayout destructores_1Layout = new javax.swing.GroupLayout(destructores_1);
-        destructores_1.setLayout(destructores_1Layout);
-        destructores_1Layout.setHorizontalGroup(
-            destructores_1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        javax.swing.GroupLayout destructor_1Layout = new javax.swing.GroupLayout(destructor_1);
+        destructor_1.setLayout(destructor_1Layout);
+        destructor_1Layout.setHorizontalGroup(
+            destructor_1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGap(0, 28, Short.MAX_VALUE)
         );
-        destructores_1Layout.setVerticalGroup(
-            destructores_1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        destructor_1Layout.setVerticalGroup(
+            destructor_1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGap(0, 25, Short.MAX_VALUE)
         );
 
-        acorazado_rest.setText("x restantes");
+        acorazado_rest.setText("1 restantes");
 
-        crucero_rest.setText("x restantes");
+        crucero_rest.setText("2 restantes");
 
-        destructor_rest.setText("x restantes");
+        destructor_rest.setText("3 restantes");
 
-        submarino_rest.setText("x restantes");
+        submarino_rest.setText("4 restantes");
 
-        lbl_instrucciones.setFont(new java.awt.Font("Microsoft JhengHei Light", 0, 24)); // NOI18N
+        lbl_instrucciones.setFont(new java.awt.Font("Microsoft JhengHei Light", 0, 14)); // NOI18N
         lbl_instrucciones.setText("Instrucciones:");
+
+        jButton1.setText("jButton1");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
+
+        jButton2.setText("jButton2");
+        jButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton2ActionPerformed(evt);
+            }
+        });
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -3925,11 +4591,11 @@ public class Vista extends javax.swing.JFrame {
                 .addGap(167, 167, 167)
                 .addComponent(lbl_my_tab, javax.swing.GroupLayout.PREFERRED_SIZE, 122, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(lbl_my_tab1, javax.swing.GroupLayout.PREFERRED_SIZE, 122, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(213, 213, 213))
-            .addGroup(layout.createSequentialGroup()
+                .addComponent(lbl_my_tab1)
+                .addGap(197, 197, 197))
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                 .addGap(37, 37, 37)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                     .addComponent(lbl_instrucciones, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -3958,24 +4624,37 @@ public class Vista extends javax.swing.JFrame {
                                             .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                             .addComponent(crucero_3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                                     .addGroup(layout.createSequentialGroup()
-                                        .addComponent(destructores_1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                        .addComponent(destructor_1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                        .addComponent(destructores_2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                                        .addComponent(destructor_2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                                     .addComponent(submarino_1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                                     .addComponent(submarino_rest)
                                     .addComponent(destructor_rest)
                                     .addComponent(acorazado_rest)
-                                    .addComponent(crucero_rest))))))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 218, Short.MAX_VALUE)
-                .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                    .addComponent(crucero_rest))))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 216, Short.MAX_VALUE)
+                        .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addGap(92, 92, 92))
+            .addGroup(layout.createSequentialGroup()
+                .addGap(79, 79, 79)
+                .addComponent(jButton1)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(jButton2)
+                .addGap(347, 347, 347))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
-                .addGap(137, 137, 137)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(jButton1))
+                    .addGroup(layout.createSequentialGroup()
+                        .addGap(27, 27, 27)
+                        .addComponent(jButton2)))
+                .addGap(86, 86, 86)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(lbl_my_tab, javax.swing.GroupLayout.PREFERRED_SIZE, 41, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(lbl_my_tab1, javax.swing.GroupLayout.PREFERRED_SIZE, 41, javax.swing.GroupLayout.PREFERRED_SIZE))
@@ -4004,8 +4683,8 @@ public class Vista extends javax.swing.JFrame {
                         .addComponent(jLabel4, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                            .addComponent(destructores_2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                            .addComponent(destructores_1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(destructor_2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(destructor_1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                             .addComponent(destructor_rest, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(jLabel5, javax.swing.GroupLayout.PREFERRED_SIZE, 22, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -4024,8 +4703,16 @@ public class Vista extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void acorazado_1MouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_acorazado_1MouseClicked
-        
+
     }//GEN-LAST:event_acorazado_1MouseClicked
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
+        acomodarAutomáticamente();
+    }//GEN-LAST:event_jButton1ActionPerformed
+
+    private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
+        tirarManualmente();
+    }//GEN-LAST:event_jButton2ActionPerformed
 
     public static void main(String args[]) {
         /* Set the Nimbus look and feel */
@@ -4069,9 +4756,11 @@ public class Vista extends javax.swing.JFrame {
     private javax.swing.JPanel crucero_2;
     private javax.swing.JPanel crucero_3;
     private javax.swing.JLabel crucero_rest;
+    private javax.swing.JPanel destructor_1;
+    private javax.swing.JPanel destructor_2;
     private javax.swing.JLabel destructor_rest;
-    private javax.swing.JPanel destructores_1;
-    private javax.swing.JPanel destructores_2;
+    private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton2;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
